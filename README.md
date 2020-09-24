@@ -2,6 +2,10 @@
 
 An adventure in building a minimal monitoring pipeline, in Rust.
 
+## Posts
+
+- [Discovery](posts/0-discovery.md)
+
 ## Why?
 
 Because I want a "minimal productive Kubernetes cluster", and existing logging machinery feels too heavy and complicated to satisfy the "minimal" part of that.
@@ -54,9 +58,9 @@ I just want something that's:
 - **Invented here.**
   I'll admit it – this is mostly fueled by hubris.
   Surely the massive communities around the above tools have it all wrong, and if only their vision was as clear as mine they could see there was a Better Way!
-  Or, more probably, I'll learn why things are the way they are by attempting to reinventing the wheel.
+  Or, more probably, I'll learn why things are the way they are by attempting to reinvent the wheel.
 
-These requirements are likely to lead to something that's strongly opinionated, a bit inflexible, and probably not appropriate if you have your own opinions on and requirements for how logging and monitoring should work.
+These requirements are likely to lead to something that's strongly opinionated, a bit inflexible, and probably not appropriate if you have your own opinions on, or requirements for, how logging and monitoring should work.
 Hopefully, however, it will be ideal if you just want your apps to be monitored and want to think as little as possible about what that means and how to do it.
 
 
