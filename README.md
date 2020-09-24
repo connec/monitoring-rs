@@ -2,11 +2,11 @@
 
 An adventure in building a minimal monitoring pipeline, in Rust.
 
-## Posts
+## Preface
 
-- [Discovery](posts/0-discovery.md)
+(Or jump to [Posts](#posts).)
 
-## Why?
+### Why?
 
 Because I want a "minimal productive Kubernetes cluster", and existing logging machinery feels too heavy and complicated to satisfy the "minimal" part of that.
 
@@ -27,7 +27,7 @@ That seems excessive, when all I want is to see some metrics and logs from a han
 Whilst these satisfy the good architectural practices of single responsibility and composability (most of those components can be swapped with alternatives), it makes setting up a "minimal" monitoring pipeline feel like a significant investment.
 This repository is an ongoing experiment to see if something more minimal and integrated is possible and compelling, and if not to understand *why*.
 
-## What?
+### What?
 
 There must be a reason the current landscape is so bloated.
 Presumably, each possible solution for collection, aggregation, and visualisation offers something unique and valuable that the others don't?
@@ -64,7 +64,7 @@ These requirements are likely to lead to something that's strongly opinionated, 
 Hopefully, however, it will be ideal if you just want your apps to be monitored and want to think as little as possible about what that means and how to do it.
 
 
-## How?
+### How?
 
 Good question.
 This will probably change, but a reasonable order of priorities could look like:
@@ -76,3 +76,7 @@ This will probably change, but a reasonable order of priorities could look like:
 1. Create a web UI (in Rust? Elm?) that can perform simple queries and visualisation.
 
 I'm taking bets (with myself I guess, since this is a private repo) on which bullet at which I will give up and use [loki-stack](https://github.com/grafana/loki/tree/master/production/helm/loki-stack)... My money is on 1.
+
+## Posts
+
+- [Discovery](posts/0-discovery.md)

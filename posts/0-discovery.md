@@ -345,4 +345,4 @@ We could keep going into the following areas:
 I'm a bit burned out on this now, however, and would like to write some code.
 Before getting into it though, I'm going to go through a [Writing your own time-series database](http://inkblotsoftware.com/articles/writing-your-own-time-series-database/) tutorial to check how insane this could be.
 
-[Back to the README](../README.md#Posts)
+[Back to the README](../README.md#posts)
