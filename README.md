@@ -80,3 +80,4 @@ I'm taking bets (with myself I guess, since this is a private repo) on which bul
 ## Posts
 
 - [Discovery](posts/0-discovery.md)
+- [Log collection part 1](posts/1-log-collection-part-1.md)
