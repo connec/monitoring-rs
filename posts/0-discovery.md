@@ -5,7 +5,7 @@ First, let's define what we mean by that.
 
 ## What is a monitoring pipeline?
 
-Sadly, [Googling](https://www.google.com/search?q=What+is+a+monitoring+pipeline%3F) the above query mostly gives me results for oil & gas pipeline monitoring... which is definitely not what I mean.
+Sadly, [Googling](https://www.google.com/search?q=What+is+a+monitoring+pipeline%3F) the above query mostly gives me results for oil & gas pipeline monitoring... which is definitely not what we mean.
 Asking [What is a logging pipeline?](https://www.google.com/search?q=What+is+a+logging+pipeline%3F) gives better results, including a few interesting blog posts and more than a few salesy articles from vendors.
 Many of them feature flow diagrams containing several non-trivial applications ([Apache Kafka](https://kafka.apache.org/) shows up a lot).
 This is not a good start for our purposes.
@@ -191,7 +191,7 @@ Let's summarise the characteristics of the incoming data and retrieval modes for
 
 #### Storage
 
-Log entries could be though of simply as lines of plain text, but the Kubernetes ecosystem is very fond of structured logging, where log entries are considered to be structured events rather than plain text.
+Log entries could be thought of simply as lines of plain text, but the Kubernetes ecosystem is very fond of structured logging, where log entries are considered to be structured events rather than plain text.
 In the context of a monitoring pipeline, it's usually the case that *all* logs are structured log events, since the logging agent would report discovered log entries along with metadata such as the source of the entry and the date/time at which the entry was discovered.
 In that view, a plain text log entry would likely be recorded in a `message` field of a structured log event, alongside the source and date/time:
 

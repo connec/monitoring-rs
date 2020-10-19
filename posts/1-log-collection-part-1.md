@@ -101,7 +101,7 @@ $ kubectl run dockertest \
 ```
 
 If the command appears to hang, debug with `kubectl get pods --namespace monitoring-rs` – if the status is `ErrImagePull` you probably need to fix your authentication.
-Check the documentation for your registry provider on how to authenticate with Kubernetes.
+Check the documentation for your registry provider on how to authenticate from Kubernetes.
 If you're using `serviceaccount`-based `imagePullSecrets`, double check you put them on the appropriate service account in the `monitoring-rs` namespace (that caught me out...).
 
 ### Start a rust project
@@ -355,3 +355,6 @@ The log files in `/var/log/pods` are themselves symlinked from the `/var/log/con
   Kubernetes only retains the logs of one previous container (`n - 1`).
 
 Now that we've confirmed where the log files are, the next thing to do is start scraping their contents.
+That will be covered in the next post!
+
+[Back to the README](../README.md#posts)
