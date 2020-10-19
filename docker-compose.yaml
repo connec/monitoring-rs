@@ -1,0 +1,29 @@
+# docker-compose.yaml
+version: '3.8'
+services:
+  monitoring:
+    build: .
+    image: registry.digitalocean.com/connec-co-uk/monitoring-rs:latest
+    volumes:
+    - logs:/var/log/containers
+
+  writer:
+    image: alpine
+    volumes:
+    - logs:/var/log/containers
+    command:
+    - sh
+    - -c
+    - while true ; do date ; sleep 1 ; done | cat >> /var/log/containers/writer.log
+
+  inspect:
+    image: alpine
+    volumes:
+    - logs:/var/log/containers
+    command:
+    - sh
+    - -c
+    - cat /var/log/containers/*
+
+volumes:
+  logs:

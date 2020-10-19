@@ -4,7 +4,7 @@
 The hope is that this would be useful for myself (and possibly others), as documention of my approach and progress.
 An inevitable consequence of this is that some of the posts will be a bit of a dead-end, and this is such a post!
 If you want to experience all the bumps in the road, it might be worth following or skimming this post.
-Otherwise just skip ahead to *&lt;next post&gt;* (TBD).
+Otherwise just skip ahead to [Log collection part 2 (redux)](2-log-collection-part-2-redux.md).
 
 In the last post we set up a trivial Rust binary to print the contents of `/var/log`.
 We also built a Docker container and ran it on Kubernetes.
