@@ -6,6 +6,8 @@ services:
     image: registry.digitalocean.com/connec-co-uk/monitoring-rs:latest
     volumes:
     - logs:/var/log/containers
+    environment:
+    - RUST_LOG=monitoring_rs=debug
 
   writer:
     image: alpine
@@ -24,6 +26,23 @@ services:
     - sh
     - -c
     - cat /var/log/containers/*
+
+  rotate:
+    image: alpine
+    volumes:
+    - logs:/var/log/containers
+    command:
+    - sh
+    - -c
+    - |
+      apk add --no-cache logrotate
+      cat <<EOF > test.config
+      /var/log/containers/writer.log {
+        copytruncate
+        size 1
+      }
+      EOF
+      logrotate --verbose test.config
 
 volumes:
   logs:
