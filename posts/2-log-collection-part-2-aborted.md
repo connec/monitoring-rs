@@ -1,4 +1,4 @@
-# Log collection (part 2) – **Aborted**
+# Log collection (part 2 – **aborted**)
 
 **Note:** I am writing these posts as I attempt to build the solution.
 The hope is that this would be useful for myself (and possibly others), as documention of my approach and progress.

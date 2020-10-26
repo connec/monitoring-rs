@@ -1,4 +1,4 @@
-# Log collection (part 2 redux)
+# Log collection (part 2 – redux)
 
 ## Recap
 
@@ -452,3 +452,5 @@ Our next steps probably look like:
 - Add more `EventType`s to handle log rotation.
 - Store the logs, instead of printing them to `stdout`.
 - Try it out in Kubernetes!
+
+[Back to the README](../README.md#posts)
