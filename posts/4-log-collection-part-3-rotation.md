@@ -293,13 +293,13 @@ We can then initialise the logger in `main`, and add some useful messages:
 
 Note that we've added `#[derive(Debug)]` to our `Event` struct in order to be able to log the events we receive.
 
-We should also update our `docker-compose.yaml` to actually show debug logs for our program:
+We should also update our `docker-compose.yaml` to actually show debug logs for our program (replace `<DOCKER REGISTRY>` with your docker registry/Docker Hub username):
 
 ```diff
 --- a/docker-compose.yaml
 +++ b/docker-compose.yaml
 @@ -6,6 +6,8 @@ services:
-     image: registry.digitalocean.com/connec-co-uk/monitoring-rs:latest
+     image: <DOCKER REGISTRY>/monitoring-rs:latest
      volumes:
      - logs:/var/log/containers
 +    environment:

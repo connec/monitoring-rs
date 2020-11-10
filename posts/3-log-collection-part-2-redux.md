@@ -79,7 +79,7 @@ Hello, world!
 ## Better development using Docker
 
 We can make our lives a little easier by using [Docker Compose](https://docs.docker.com/compose/).
-Let's create a basic [compose file](https://docs.docker.com/compose/compose-file/) with a shared log volume and three containers:
+Let's create a basic [compose file](https://docs.docker.com/compose/compose-file/) with a shared log volume and three containers (replace `<DOCKER REGISTRY>` with your docker registry/Docker Hub username):
 
 ```yaml
 # docker-compose.yaml
@@ -87,7 +87,7 @@ version: '3.8'
 services:
   monitoring:
     build: .
-    image: registry.digitalocean.com/connec-co-uk/monitoring-rs:latest
+    image: <DOCKER REGISRY>/monitoring-rs:latest
     volumes:
     - logs:/var/log/containers
 
