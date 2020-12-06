@@ -85,3 +85,4 @@ I'm taking bets (with myself I guess, since this is a private repo) on which bul
 - [Log collection part 2 (redux)](posts/3-log-collection-part-2-redux.md)
 - [Log collection part 3 (rotation)](posts/4-log-collection-part-3-rotation.md)
 - [Log collection part 4 (minikube)](posts/5-log-collection-part-4-minikube.md)
+- [Recentring](posts/6-recentring.md)
