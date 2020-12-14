@@ -1,4 +1,4 @@
-# End-to-end
+# Log collection (part 6 – end-to-end)
 
 Now that we have a vague impression of what pieces we want to build, and a space in our project in which to build them, let's write a naive implementation of our `log_database` and `api`, and hook them up.
 

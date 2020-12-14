@@ -1,4 +1,4 @@
-# Recentring
+# Log collection (part 5 – recentring)
 
 We've now spent quite a bit of time digging into log collection.
 We have arrived at an implementation that successfully detects log writes from all containers in the cluster, and re-logs them (creating quite the explosion of logs!).
