@@ -2,24 +2,16 @@
 use std::collections::hash_map::HashMap;
 use std::ffi::OsStr;
 use std::fs::{self, File};
-use std::io::{self, Seek, Stdout};
+use std::io::{self, BufRead, BufReader, Seek};
 use std::path::{Path, PathBuf};
 
 use inotify::{EventMask, Inotify, WatchDescriptor, WatchMask};
 
 #[derive(Debug)]
 enum Event<'collector> {
-    Create {
-        path: PathBuf,
-    },
-    Append {
-        stdout: &'collector mut Stdout,
-        live_file: &'collector mut LiveFile,
-    },
-    Truncate {
-        stdout: &'collector mut Stdout,
-        live_file: &'collector mut LiveFile,
-    },
+    Create { path: PathBuf },
+    Append { live_file: &'collector mut LiveFile },
+    Truncate { live_file: &'collector mut LiveFile },
 }
 
 impl Event<'_> {
@@ -49,13 +41,19 @@ impl std::fmt::Display for Event<'_> {
 #[derive(Debug)]
 struct LiveFile {
     path: PathBuf,
-    file: File,
+    reader: BufReader<File>,
+    entry_buf: String,
+}
+
+#[derive(Debug)]
+pub struct LogEntry {
+    pub path: PathBuf,
+    pub line: String,
 }
 
 pub struct Collector {
     root_path: PathBuf,
     root_wd: WatchDescriptor,
-    stdout: Stdout,
     live_files: HashMap<WatchDescriptor, LiveFile>,
     inotify: Inotify,
 }
@@ -70,7 +68,6 @@ impl Collector {
         let mut collector = Self {
             root_path: root_path.to_path_buf(),
             root_wd,
-            stdout: io::stdout(),
             live_files: HashMap::new(),
             inotify,
         };
@@ -86,8 +83,9 @@ impl Collector {
         Ok(collector)
     }
 
-    pub fn handle_events(&mut self, buffer: &mut [u8]) -> io::Result<()> {
+    pub fn collect_entries(&mut self, buffer: &mut [u8]) -> io::Result<Vec<LogEntry>> {
         let inotify_events = self.inotify.read_events_blocking(buffer)?;
+        let mut entries = Vec::new();
 
         for inotify_event in inotify_events {
             trace!("Received inotify event: {:?}", inotify_event);
@@ -95,19 +93,31 @@ impl Collector {
             if let Some(event) = self.check_event(inotify_event)? {
                 debug!("{}", event);
 
-                match event {
-                    Event::Create { path } => self.handle_event_create(path),
-                    Event::Append { stdout, live_file } => {
-                        Self::handle_event_append(stdout, &mut live_file.file)
+                let live_file = match event {
+                    Event::Create { path } => self.handle_event_create(path)?,
+                    Event::Append { live_file } => live_file,
+                    Event::Truncate { live_file } => {
+                        Self::handle_event_truncate(live_file)?;
+                        live_file
                     }
-                    Event::Truncate { stdout, live_file } => {
-                        Self::handle_event_truncate(stdout, &mut live_file.file)
+                };
+
+                while live_file.reader.read_line(&mut live_file.entry_buf)? != 0 {
+                    if live_file.entry_buf.ends_with('\n') {
+                        live_file.entry_buf.pop();
+                        let entry = LogEntry {
+                            path: live_file.path.clone(),
+                            line: live_file.entry_buf.clone(),
+                        };
+                        entries.push(entry);
+
+                        live_file.entry_buf.clear();
                     }
-                }?;
+                }
             }
         }
 
-        Ok(())
+        Ok(entries)
     }
 
     fn check_event<'ev>(
@@ -138,7 +148,6 @@ impl Collector {
             return Ok(Some(Event::Create { path }));
         }
 
-        let stdout = &mut self.stdout;
         let live_file = match self.live_files.get_mut(&inotify_event.wd) {
             None => {
                 warn!(
@@ -150,38 +159,37 @@ impl Collector {
             Some(live_file) => live_file,
         };
 
-        let metadata = live_file.file.metadata()?;
-        let seekpos = live_file.file.seek(io::SeekFrom::Current(0))?;
+        let metadata = live_file.reader.get_ref().metadata()?;
+        let seekpos = live_file.reader.seek(io::SeekFrom::Current(0))?;
 
         if seekpos <= metadata.len() {
-            Ok(Some(Event::Append { stdout, live_file }))
+            Ok(Some(Event::Append { live_file }))
         } else {
-            Ok(Some(Event::Truncate { stdout, live_file }))
+            Ok(Some(Event::Truncate { live_file }))
         }
     }
 
-    fn handle_event_create(&mut self, path: PathBuf) -> io::Result<()> {
+    fn handle_event_create(&mut self, path: PathBuf) -> io::Result<&mut LiveFile> {
         let realpath = fs::canonicalize(&path)?;
 
         let wd = self.inotify.add_watch(&realpath, WatchMask::MODIFY)?;
-        let mut file = File::open(realpath)?;
-        file.seek(io::SeekFrom::End(0))?;
+        let mut reader = BufReader::new(File::open(realpath)?);
+        reader.seek(io::SeekFrom::End(0))?;
 
-        self.live_files.insert(wd, LiveFile { path, file });
-
-        Ok(())
+        self.live_files.insert(
+            wd.clone(),
+            LiveFile {
+                path,
+                reader,
+                entry_buf: String::new(),
+            },
+        );
+        Ok(self.live_files.get_mut(&wd).unwrap())
     }
 
-    fn handle_event_append(stdout: &mut io::Stdout, mut file: &mut File) -> io::Result<()> {
-        io::copy(&mut file, stdout)?;
-
-        Ok(())
-    }
-
-    fn handle_event_truncate(stdout: &mut io::Stdout, mut file: &mut File) -> io::Result<()> {
-        file.seek(io::SeekFrom::Start(0))?;
-        io::copy(&mut file, stdout)?;
-
+    fn handle_event_truncate(live_file: &mut LiveFile) -> io::Result<()> {
+        live_file.reader.seek(io::SeekFrom::Start(0))?;
+        live_file.entry_buf.clear();
         Ok(())
     }
 }

@@ -1,6 +1,8 @@
 # Dockerfile
 FROM rust:1.46.0-alpine
 
+RUN apk add --no-cache musl-dev
+
 RUN mkdir /build
 ADD . /build/
 

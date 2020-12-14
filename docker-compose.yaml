@@ -8,6 +8,8 @@ services:
     - logs:/var/log/containers
     environment:
     - RUST_LOG=monitoring_rs=debug
+    ports:
+    - 8000:8000
 
   writer:
     image: alpine
