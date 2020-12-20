@@ -138,16 +138,32 @@ impl Database {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{Config, Database};
+pub mod test {
+    use tempfile::TempDir;
 
-    #[test]
-    fn test_new_db() {
+    use super::Config;
+    use super::Database;
+
+    pub fn open_temp_database() -> (Database, TempDir) {
         let tempdir = tempfile::tempdir().expect("unable to create tempdir");
         let config = Config {
             data_directory: tempdir.path().to_path_buf(),
         };
-        let mut database = Database::open(config).expect("unable to open database");
+        (
+            Database::open(config).expect("unable to open database"),
+            tempdir,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test::open_temp_database;
+    use super::{Config, Database};
+
+    #[test]
+    fn test_new_db() {
+        let (mut database, _tempdir) = open_temp_database();
 
         assert_eq!(
             database.read("foo").expect("unable to read from database"),
@@ -173,27 +189,18 @@ mod tests {
 
     #[test]
     fn test_existing_db() {
-        let tempdir = tempfile::tempdir().expect("unable to create tempdir");
+        let (mut database, _tempdir) = open_temp_database();
+        let data_directory = database.data_directory.clone();
 
-        {
-            let config = Config {
-                data_directory: tempdir.path().to_path_buf(),
-            };
-            let mut database = Database::open(config).expect("unable to open database");
+        database
+            .write("foo", "line1")
+            .expect("failed to write to database");
+        database
+            .write("foo", "line2")
+            .expect("failed to write to database");
+        drop(database);
 
-            database
-                .write("foo", "line1")
-                .expect("failed to write to database");
-            database
-                .write("foo", "line2")
-                .expect("failed to write to database");
-
-            drop(database);
-        }
-
-        let config = Config {
-            data_directory: tempdir.path().to_path_buf(),
-        };
+        let config = Config { data_directory };
         let database = Database::open(config).expect("unable to open database");
 
         assert_eq!(
