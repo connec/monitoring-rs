@@ -11,6 +11,12 @@ services:
     ports:
     - 8000:8000
 
+  test:
+    build:
+      context: .
+      target: builder
+    command: [cargo, test, --release]
+
   writer:
     image: alpine
     volumes:

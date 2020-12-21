@@ -9,6 +9,9 @@ build-monitoring:
 monitoring: build-monitoring
 	@docker-compose up --force-recreate monitoring
 
+dockertest:
+	@docker-compose up --build --force-recreate test
+
 writer:
 	@docker-compose up -d writer
 

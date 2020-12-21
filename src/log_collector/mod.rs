@@ -1,11 +1,12 @@
 // log_collector/mod.rs
+mod watcher;
+
 use std::collections::hash_map::HashMap;
-use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Seek};
 use std::path::{Path, PathBuf};
 
-use inotify::{EventMask, Inotify, WatchDescriptor, WatchMask};
+use watcher::{watcher, Watcher};
 
 #[derive(Debug)]
 enum Event<'collector> {
@@ -51,30 +52,35 @@ pub struct LogEntry {
     pub line: String,
 }
 
-pub struct Collector {
+pub struct Collector<W: Watcher> {
     root_path: PathBuf,
-    root_wd: WatchDescriptor,
-    live_files: HashMap<WatchDescriptor, LiveFile>,
-    inotify: Inotify,
+    root_wd: watcher::Descriptor,
+    live_files: HashMap<watcher::Descriptor, LiveFile>,
+    watched_files: HashMap<PathBuf, watcher::Descriptor>,
+    watcher: W,
 }
 
-impl Collector {
-    pub fn initialize(root_path: &Path) -> io::Result<Self> {
-        let mut inotify = Inotify::init()?;
+pub fn initialize(root_path: &Path) -> io::Result<Collector<impl Watcher>> {
+    let watcher = watcher()?;
+    Collector::initialize(root_path, watcher)
+}
 
+impl<W: Watcher> Collector<W> {
+    fn initialize(root_path: &Path, mut watcher: W) -> io::Result<Self> {
         debug!("Initialising watch on root path {:?}", root_path);
-        let root_wd = inotify.add_watch(root_path, WatchMask::CREATE)?;
+        let root_wd = watcher.watch_directory(root_path)?;
 
         let mut collector = Self {
             root_path: root_path.to_path_buf(),
             root_wd,
             live_files: HashMap::new(),
-            inotify,
+            watched_files: HashMap::new(),
+            watcher,
         };
 
         for entry in fs::read_dir(root_path)? {
             let entry = entry?;
-            let path = entry.path();
+            let path = fs::canonicalize(entry.path())?;
 
             debug!("{}", Event::Create { path: path.clone() });
             collector.handle_event_create(path)?;
@@ -83,18 +89,39 @@ impl Collector {
         Ok(collector)
     }
 
-    pub fn collect_entries(&mut self, buffer: &mut [u8]) -> io::Result<Vec<LogEntry>> {
-        let inotify_events = self.inotify.read_events_blocking(buffer)?;
+    pub fn collect_entries(&mut self) -> io::Result<Vec<LogEntry>> {
+        let watcher_events = self.watcher.read_events_blocking()?;
+
         let mut entries = Vec::new();
+        let mut read_file = |live_file: &mut LiveFile| -> io::Result<()> {
+            while live_file.reader.read_line(&mut live_file.entry_buf)? != 0 {
+                if live_file.entry_buf.ends_with('\n') {
+                    live_file.entry_buf.pop();
+                    let entry = LogEntry {
+                        path: live_file.path.clone(),
+                        line: live_file.entry_buf.clone(),
+                    };
+                    entries.push(entry);
 
-        for inotify_event in inotify_events {
-            trace!("Received inotify event: {:?}", inotify_event);
+                    live_file.entry_buf.clear();
+                }
+            }
+            Ok(())
+        };
 
-            if let Some(event) = self.check_event(inotify_event)? {
+        for watcher_event in watcher_events {
+            trace!("Received inotify event: {:?}", watcher_event);
+
+            let mut new_paths = Vec::new();
+
+            for event in self.check_event(watcher_event)? {
                 debug!("{}", event);
 
                 let live_file = match event {
-                    Event::Create { path } => self.handle_event_create(path)?,
+                    Event::Create { path } => {
+                        new_paths.push(path);
+                        continue;
+                    }
                     Event::Append { live_file } => live_file,
                     Event::Truncate { live_file } => {
                         Self::handle_event_truncate(live_file)?;
@@ -102,59 +129,41 @@ impl Collector {
                     }
                 };
 
-                while live_file.reader.read_line(&mut live_file.entry_buf)? != 0 {
-                    if live_file.entry_buf.ends_with('\n') {
-                        live_file.entry_buf.pop();
-                        let entry = LogEntry {
-                            path: live_file.path.clone(),
-                            line: live_file.entry_buf.clone(),
-                        };
-                        entries.push(entry);
+                read_file(live_file)?;
+            }
 
-                        live_file.entry_buf.clear();
-                    }
-                }
+            for path in new_paths {
+                let live_file = self.handle_event_create(path)?;
+                read_file(live_file)?;
             }
         }
 
         Ok(entries)
     }
 
-    fn check_event<'ev>(
-        &mut self,
-        inotify_event: inotify::Event<&'ev OsStr>,
-    ) -> io::Result<Option<Event>> {
-        if inotify_event.wd == self.root_wd {
-            if !inotify_event.mask.contains(EventMask::CREATE) {
-                warn!(
-                    "Received unexpected event for root fd: {:?}",
-                    inotify_event.mask
-                );
-                return Ok(None);
+    fn check_event(&mut self, watcher_event: watcher::Event) -> io::Result<Vec<Event>> {
+        if watcher_event.descriptor == self.root_wd {
+            let mut events = Vec::new();
+
+            for entry in fs::read_dir(&self.root_path)? {
+                let entry = entry?;
+                let path = fs::canonicalize(entry.path())?;
+
+                if !self.watched_files.contains_key(&path) {
+                    events.push(Event::Create { path });
+                }
             }
 
-            let name = match inotify_event.name {
-                None => {
-                    warn!("Received CREATE event for root fd without a name");
-                    return Ok(None);
-                }
-                Some(name) => name,
-            };
-
-            let mut path = PathBuf::with_capacity(self.root_path.capacity() + name.len());
-            path.push(&self.root_path);
-            path.push(name);
-
-            return Ok(Some(Event::Create { path }));
+            return Ok(events);
         }
 
-        let live_file = match self.live_files.get_mut(&inotify_event.wd) {
+        let live_file = match self.live_files.get_mut(&watcher_event.descriptor) {
             None => {
                 warn!(
-                    "Received event for unregistered watch descriptor: {:?} {:?}",
-                    inotify_event.mask, inotify_event.wd
+                    "Received event for unregistered watch descriptor: {:?}",
+                    watcher_event
                 );
-                return Ok(None);
+                return Ok(vec![]);
             }
             Some(live_file) => live_file,
         };
@@ -163,27 +172,26 @@ impl Collector {
         let seekpos = live_file.reader.seek(io::SeekFrom::Current(0))?;
 
         if seekpos <= metadata.len() {
-            Ok(Some(Event::Append { live_file }))
+            Ok(vec![Event::Append { live_file }])
         } else {
-            Ok(Some(Event::Truncate { live_file }))
+            Ok(vec![Event::Truncate { live_file }])
         }
     }
 
     fn handle_event_create(&mut self, path: PathBuf) -> io::Result<&mut LiveFile> {
-        let realpath = fs::canonicalize(&path)?;
-
-        let wd = self.inotify.add_watch(&realpath, WatchMask::MODIFY)?;
-        let mut reader = BufReader::new(File::open(realpath)?);
+        let wd = self.watcher.watch_file(&path)?;
+        let mut reader = BufReader::new(File::open(&path)?);
         reader.seek(io::SeekFrom::End(0))?;
 
         self.live_files.insert(
             wd.clone(),
             LiveFile {
-                path,
+                path: path.clone(),
                 reader,
                 entry_buf: String::new(),
             },
         );
+        self.watched_files.insert(path, wd.clone());
         Ok(self.live_files.get_mut(&wd).unwrap())
     }
 
@@ -191,5 +199,56 @@ impl Collector {
         live_file.reader.seek(io::SeekFrom::Start(0))?;
         live_file.entry_buf.clear();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use std::io::Write;
+
+    #[test]
+    fn collect_entries_empty_file() {
+        let tempdir = tempfile::tempdir().expect("unable to create tempdir");
+        let mut collector =
+            super::initialize(&tempdir.path()).expect("unable to initialize collector");
+
+        let mut file_path = tempdir.path().to_path_buf();
+        file_path.push("test.log");
+        File::create(file_path).expect("failed to create temp file");
+
+        let entries: Vec<String> = collector
+            .collect_entries()
+            .expect("failed to collect entries")
+            .into_iter()
+            .map(|entry| entry.line)
+            .collect();
+        assert_eq!(entries, Vec::<String>::new());
+    }
+
+    #[test]
+    fn collect_entries_nonempty_file() {
+        let tempdir = tempfile::tempdir().expect("unable to create tempdir");
+        let mut collector =
+            super::initialize(&tempdir.path()).expect("unable to initialize collector");
+
+        let mut file_path = tempdir.path().to_path_buf();
+        file_path.push("test.log");
+        let mut file = File::create(file_path).expect("failed to create temp file");
+
+        collector
+            .collect_entries()
+            .expect("failed to collect entries");
+
+        writeln!(file, "hello?").expect("failed to write to file");
+        writeln!(file, "world!").expect("failed to write to file");
+
+        let entries: Vec<String> = collector
+            .collect_entries()
+            .expect("failed to collect entries")
+            .into_iter()
+            .map(|entry| entry.line)
+            .collect();
+        assert_eq!(entries, vec!["hello?".to_string(), "world!".to_string()]);
     }
 }

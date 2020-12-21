@@ -88,3 +88,4 @@ I'm taking bets (with myself I guess, since this is a private repo) on which bul
 - [Log collection part 5 (recentring)](posts/6-log-collection-part-5-recentring.md)
 - [Log collection part 6 (end-to-end)](posts/7-log-collection-part-6-end-to-end.md)
 - [Log collection part 7 (consolidating)](posts/8-log-collection-part-7-consolidating.md)
+- [Log collection part 8 (multi-platform)](posts/9-log-collection-part-8-multi-platform.md)
