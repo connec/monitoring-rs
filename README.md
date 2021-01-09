@@ -79,13 +79,13 @@ I'm taking bets (with myself I guess, since this is a private repo) on which bul
 
 ## Posts
 
-- [Discovery](posts/0-discovery.md)
-- [Log collection part 1](posts/1-log-collection-part-1.md)
-- [Log collection part 2 (aborted)](posts/2-log-collection-part-2-aborted.md)
-- [Log collection part 2 (redux)](posts/3-log-collection-part-2-redux.md)
-- [Log collection part 3 (rotation)](posts/4-log-collection-part-3-rotation.md)
-- [Log collection part 4 (minikube)](posts/5-log-collection-part-4-minikube.md)
-- [Log collection part 5 (recentring)](posts/6-log-collection-part-5-recentring.md)
-- [Log collection part 6 (end-to-end)](posts/7-log-collection-part-6-end-to-end.md)
-- [Log collection part 7 (consolidating)](posts/8-log-collection-part-7-consolidating.md)
-- [Log collection part 8 (multi-platform)](posts/9-log-collection-part-8-multi-platform.md)
+- [Discovery](posts/00-discovery.md)
+- [Log collection part 1](posts/01-log-collection-part-1.md)
+- [Log collection part 2 (aborted)](posts/02-log-collection-part-2-aborted.md)
+- [Log collection part 2 (redux)](posts/03-log-collection-part-2-redux.md)
+- [Log collection part 3 (rotation)](posts/04-log-collection-part-3-rotation.md)
+- [Log collection part 4 (minikube)](posts/05-log-collection-part-4-minikube.md)
+- [Log collection part 5 (recentring)](posts/06-log-collection-part-5-recentring.md)
+- [Log collection part 6 (end-to-end)](posts/07-log-collection-part-6-end-to-end.md)
+- [Log collection part 7 (consolidating)](posts/08-log-collection-part-7-consolidating.md)
+- [Log collection part 8 (multi-platform)](posts/09-log-collection-part-8-multi-platform.md)
