@@ -1,11 +1,4 @@
 // main.rs
-#[macro_use]
-extern crate log;
-
-mod api;
-mod log_collector;
-mod log_database;
-
 use std::env;
 use std::fs;
 use std::io;
@@ -16,7 +9,8 @@ use async_std::prelude::FutureExt;
 use async_std::sync::RwLock;
 use async_std::task;
 
-use log_database::Database;
+use monitoring_rs::log_database::{self, Database};
+use monitoring_rs::{api, log_collector};
 
 const VAR_CONTAINER_LOG_DIRECTORY: &str = "CONTAINER_LOG_DIRECTORY";
 const DEFAULT_CONTAINER_LOG_DIRECTORY: &str = "/var/log/containers";
@@ -59,13 +53,11 @@ fn init_collector(
     container_log_directory: &Path,
     database: Arc<RwLock<Database>>,
 ) -> io::Result<()> {
-    let mut collector = log_collector::initialize(container_log_directory)?;
-    loop {
-        let entries = collector.collect_entries()?;
+    let collector = log_collector::directory::initialize(container_log_directory)?;
+    for entry in collector {
+        let entry = entry?;
         let mut database = task::block_on(database.write());
-        for entry in entries {
-            let key = entry.path.to_string_lossy();
-            database.write(&key, &entry.line)?;
-        }
+        database.write(&entry)?;
     }
+    Ok(())
 }
