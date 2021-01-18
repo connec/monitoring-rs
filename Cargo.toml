@@ -24,6 +24,3 @@ kqueue = "1.0.2"
 [dev-dependencies]
 tempfile = "3.1.0"
 tide-testing = "0.1.2"
-
-[patch.crates-io]
-kqueue-sys = { git = "https://gitlab.com/connec/rust-kqueue-sys.git", rev = "263f56cfb022b69643c9307095db1fde910822df" }
