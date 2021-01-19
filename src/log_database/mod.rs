@@ -1,4 +1,7 @@
 // src/log_database/mod.rs
+
+//! The interface for log storage in `monitoring-rs`.
+
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
@@ -11,7 +14,9 @@ const DATA_FILE_EXTENSION: &str = "dat";
 const METADATA_FILE_EXTENSION: &str = "json";
 const DATA_FILE_RECORD_SEPARATOR: u8 = 147;
 
+/// The configuration needed to open a database.
 pub struct Config {
+    /// The directory in which the database should store its data.
     pub data_directory: PathBuf,
 }
 
@@ -20,6 +25,24 @@ enum FileType {
     MetadataFile,
 }
 
+/// A log database supporting key-value rerieval.
+///
+/// **Note:** the functionality of this database is extremely minimal just now, and is missing vital
+/// features like retention management.
+///
+/// That said, it should be decently fast for storing and querying UTF-8 log entries with key-value
+/// metadata (via [`LogEntry`](crate::LogEntry)).
+///
+/// - Log lines are stored in a flat file named with a hash of the entry's metadata. Log entry
+///   metadata is stored in JSON files with the same base name. Handles to all log files are kept
+///   open in memory. An in-memory index is maintained for all `(key, value)` pairs of metadata to
+///   the set of log files that include that metadata.
+/// - Writes append a new line to the relevant file, creating a new log file and metadata file if
+///   necessary (and updating the index if so).
+/// - Reads are performed using a `key=value` pair. The index is used to identify the files that
+///   contain relevant records, and these files are then scanned in their entirety.
+///
+/// The structure, interface, and storage approach of the database is likely to change in future.
 pub struct Database {
     data_directory: PathBuf,
     files: HashMap<String, File>,
@@ -27,6 +50,9 @@ pub struct Database {
 }
 
 impl Database {
+    /// # Errors
+    ///
+    /// Propagates any `io::Error` that ocurrs when opening the database.
     pub fn open(config: Config) -> io::Result<Self> {
         let mut files = HashMap::new();
         let mut index = HashMap::new();
@@ -79,7 +105,7 @@ impl Database {
                     let metadata = serde_json::from_reader(file)?;
                     let key = Self::hash(&metadata);
 
-                    for meta in metadata.into_iter() {
+                    for meta in metadata {
                         let keys = index
                             .entry((meta.0.to_string(), meta.1.to_string()))
                             .or_insert_with(|| HashSet::with_capacity(1));
@@ -98,6 +124,9 @@ impl Database {
         })
     }
 
+    /// # Errors
+    ///
+    /// Propagates any `io::Error` that occurs when querying the database.
     pub fn query(&self, key: &str, value: &str) -> io::Result<Option<Vec<String>>> {
         let keys = match self.index.get(&(key.to_string(), value.to_string())) {
             None => return Ok(None),
@@ -114,10 +143,13 @@ impl Database {
         Ok(Some(lines))
     }
 
+    /// # Errors
+    ///
+    /// Propagates any `io::Error` that occurs when querying the database.
     pub fn write(&mut self, entry: &LogEntry) -> io::Result<()> {
         let key = Self::hash(&entry.metadata);
 
-        for meta in entry.metadata.iter() {
+        for meta in &entry.metadata {
             let keys = self
                 .index
                 .entry((meta.0.to_string(), meta.1.to_string()))
@@ -130,32 +162,31 @@ impl Database {
             }
         }
 
-        let (file, needs_delimeter) = match self.files.get_mut(&key) {
-            Some(file) => (file, true),
-            None => {
-                let mut entry_path = self.data_directory.clone();
-                entry_path.push(&key);
+        let (file, needs_delimeter) = if let Some(file) = self.files.get_mut(&key) {
+            (file, true)
+        } else {
+            let mut entry_path = self.data_directory.clone();
+            entry_path.push(&key);
 
-                let mut metadata_path = entry_path;
-                metadata_path.set_extension(METADATA_FILE_EXTENSION);
-                fs::write(&metadata_path, serde_json::to_vec(&entry.metadata)?)?;
+            let mut metadata_path = entry_path;
+            metadata_path.set_extension(METADATA_FILE_EXTENSION);
+            fs::write(&metadata_path, serde_json::to_vec(&entry.metadata)?)?;
 
-                let mut data_path = metadata_path;
-                data_path.set_extension(DATA_FILE_EXTENSION);
+            let mut data_path = metadata_path;
+            data_path.set_extension(DATA_FILE_EXTENSION);
 
-                let file = OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .read(true)
-                    .open(&data_path)?;
+            let file = OpenOptions::new()
+                .append(true)
+                .create(true)
+                .read(true)
+                .open(&data_path)?;
 
-                // Using `.or_insert` here is annoying since we know there is no entry, but
-                // `hash_map::entry::insert` is unstable
-                // ([#65225](https://github.com/rust-lang/rust/issues/65225)).
-                let file = self.files.entry(key).or_insert(file);
+            // Using `.or_insert` here is annoying since we know there is no entry, but
+            // `hash_map::entry::insert` is unstable
+            // ([#65225](https://github.com/rust-lang/rust/issues/65225)).
+            let file = self.files.entry(key).or_insert(file);
 
-                (file, false)
-            }
+            (file, false)
         };
 
         if needs_delimeter {
@@ -198,7 +229,7 @@ impl Database {
     }
 
     fn hash(metadata: &HashMap<String, String>) -> String {
-        let mut digest = [0u8; 16];
+        let mut digest = [0_u8; 16];
         for (key, value) in metadata.iter() {
             let mut context = md5::Context::new();
             context.consume(key);
@@ -218,141 +249,66 @@ impl Database {
 }
 
 #[cfg(test)]
-pub mod test {
-    use tempfile::TempDir;
-
-    use super::Config;
-    use super::Database;
-
-    pub fn open_temp_database() -> (Database, TempDir) {
-        let tempdir = tempfile::tempdir().expect("unable to create tempdir");
-        let config = Config {
-            data_directory: tempdir.path().to_path_buf(),
-        };
-        (
-            Database::open(config).expect("unable to open database"),
-            tempdir,
-        )
-    }
-}
-
-#[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use crate::test::{self, log_entry, temp_database};
 
-    use crate::LogEntry;
-
-    use super::test::open_temp_database;
     use super::{Config, Database};
 
     #[test]
-    fn test_new_db() {
-        let (mut database, _tempdir) = open_temp_database();
-        let metadata: HashMap<_, _> = vec![("foo".to_string(), "bar".to_string())]
-            .into_iter()
-            .collect();
+    fn test_new_db() -> test::Result {
+        let (_tempdir, mut database) = temp_database()?;
 
-        assert_eq!(
-            database
-                .query("foo", "bar")
-                .expect("unable to read from database"),
-            None
-        );
+        assert_eq!(database.query("foo", "bar")?, None);
 
-        database
-            .write(&LogEntry {
-                line: "line1".into(),
-                metadata: metadata.clone(),
-            })
-            .expect("unable to write to database");
+        database.write(&log_entry("line1", &[("foo", "bar")]))?;
         assert_eq!(
-            database
-                .query("foo", "bar")
-                .expect("unable to read from database"),
+            database.query("foo", "bar")?,
             Some(vec!["line1".to_string()])
         );
 
-        database
-            .write(&LogEntry {
-                line: "line2".into(),
-                metadata,
-            })
-            .expect("unable to write to database");
+        database.write(&log_entry("line2", &[("foo", "bar")]))?;
         assert_eq!(
-            database
-                .query("foo", "bar")
-                .expect("unable to read from database"),
+            database.query("foo", "bar")?,
             Some(vec!["line1".to_string(), "line2".to_string()])
         );
+
+        Ok(())
     }
 
     #[test]
-    fn test_existing_db() {
-        let (mut database, _tempdir) = open_temp_database();
-        let data_directory = database.data_directory.clone();
-        let metadata: HashMap<_, _> = vec![("foo".to_string(), "bar".to_string())]
-            .into_iter()
-            .collect();
+    fn test_existing_db() -> test::Result {
+        let (tempdir, mut database) = temp_database()?;
 
-        database
-            .write(&LogEntry {
-                line: "line1".into(),
-                metadata: metadata.clone(),
-            })
-            .expect("failed to write to database");
-        database
-            .write(&LogEntry {
-                line: "line2".into(),
-                metadata,
-            })
-            .expect("failed to write to database");
+        database.write(&log_entry("line1", &[("foo", "bar")]))?;
+        database.write(&log_entry("line2", &[("foo", "bar")]))?;
         drop(database);
 
-        let config = Config { data_directory };
-        let database = Database::open(config).expect("unable to open database");
+        let config = Config {
+            data_directory: tempdir.path().to_path_buf(),
+        };
+        let database = Database::open(config)?;
 
         assert_eq!(
-            database
-                .query("foo", "bar")
-                .expect("unable to read from database"),
+            database.query("foo", "bar")?,
             Some(vec!["line1".to_string(), "line2".to_string()])
         );
+
+        Ok(())
     }
 
     #[test]
-    fn test_metadata() {
-        let (mut database, _tempdir) = open_temp_database();
+    fn test_query_metadata() -> test::Result {
+        let (_tempdir, mut database) = temp_database()?;
 
-        database
-            .write(&LogEntry {
-                line: "line1".into(),
-                metadata: HashMap::new(),
-            })
-            .expect("failed to write to database");
-
-        database
-            .write(&LogEntry {
-                line: "line2".into(),
-                metadata: vec![("hello".to_string(), "world".to_string())]
-                    .into_iter()
-                    .collect(),
-            })
-            .expect("failed to write to database");
-
-        database
-            .write(&LogEntry {
-                line: "line3".into(),
-                metadata: vec![("hello".to_string(), "foo".to_string())]
-                    .into_iter()
-                    .collect(),
-            })
-            .expect("failed to write to database");
+        database.write(&log_entry("line1", &[]))?;
+        database.write(&log_entry("line2", &[("hello", "world")]))?;
+        database.write(&log_entry("line2", &[("hello", "foo")]))?;
 
         assert_eq!(
-            database
-                .query("hello", "world")
-                .expect("failed to query database"),
+            database.query("hello", "world")?,
             Some(vec!["line2".to_string()])
         );
+
+        Ok(())
     }
 }

@@ -1,7 +1,11 @@
+//! A log collector that watches a directory of log files.
+
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Seek};
 use std::path::{Path, PathBuf};
+
+use log::{debug, trace, warn};
 
 use crate::LogEntry;
 
@@ -26,8 +30,7 @@ impl Event<'_> {
     fn path(&self) -> &Path {
         match self {
             Event::Create { path } => path,
-            Event::Append { live_file, .. } => &live_file.path,
-            Event::Truncate { live_file, .. } => &live_file.path,
+            Event::Append { live_file, .. } | Event::Truncate { live_file, .. } => &live_file.path,
         }
     }
 }
@@ -54,6 +57,9 @@ struct Collector<W: Watcher> {
     entry_buf: std::vec::IntoIter<LogEntry>,
 }
 
+/// # Errors
+///
+/// Propagates any `io::Error`s that occur during initialization.
 pub fn initialize(root_path: &Path) -> io::Result<impl super::Collector> {
     let watcher = watcher()?;
     Collector::initialize(root_path, watcher)
@@ -114,7 +120,7 @@ impl<W: Watcher> Collector<W> {
 
             let mut new_paths = Vec::new();
 
-            for event in self.check_event(watcher_event)? {
+            for event in self.check_event(&watcher_event)? {
                 debug!("{}", event);
 
                 let live_file = match event {
@@ -141,7 +147,7 @@ impl<W: Watcher> Collector<W> {
         Ok(entries)
     }
 
-    fn check_event(&mut self, watcher_event: watcher::Event) -> io::Result<Vec<Event>> {
+    fn check_event(&mut self, watcher_event: &watcher::Event) -> io::Result<Vec<Event>> {
         if watcher_event.descriptor == self.root_wd {
             let mut events = Vec::new();
 
@@ -208,114 +214,100 @@ impl<W: Watcher> Iterator for Collector<W> {
     type Item = Result<LogEntry, io::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.entry_buf.len() == 0 {
+        while self.entry_buf.len() == 0 {
             let entries = match self.collect_entries() {
                 Ok(entries) => entries,
                 Err(error) => return Some(Err(error)),
             };
             self.entry_buf = entries.into_iter();
         }
-        Some(Ok(self.entry_buf.next()?))
+        // `unwrap` because we've refilled `entry_buf`
+        Some(Ok(self.entry_buf.next().unwrap()))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs::{self, File};
-    use std::io::Write;
+    use std::io::{self, Write};
+    use std::path::PathBuf;
+
+    use tempfile::TempDir;
 
     use crate::log_collector::watcher::watcher;
-    use crate::LogEntry;
+    use crate::test::{self, log_entry};
 
     use super::Collector;
 
     #[test]
-    fn collect_entries_empty_file() {
-        let tempdir = tempfile::tempdir().expect("unable to create tempdir");
-        let mut collector =
-            Collector::initialize(&tempdir.path(), watcher().expect("failed to start watcher"))
-                .expect("unable to initialize collector");
+    fn collect_entries_empty_file() -> test::Result {
+        let tempdir = tempfile::tempdir()?;
+        let mut collector = Collector::initialize(tempdir.path(), watcher()?)?;
 
-        let mut file_path = tempdir.path().to_path_buf();
-        file_path.push("test.log");
-        File::create(file_path).expect("failed to create temp file");
+        create_log_file(&tempdir)?;
 
-        let entries = collector
-            .collect_entries()
-            .expect("failed to collect entries");
-        assert_eq!(entries, Vec::<LogEntry>::new());
+        // A new file will trigger an event but return no entries.
+        let entries = collector.collect_entries()?;
+        assert_eq!(entries, vec![]);
+
+        Ok(())
     }
 
     #[test]
-    fn collect_entries_nonempty_file() {
-        let tempdir = tempfile::tempdir().expect("unable to create tempdir");
-        let mut collector =
-            Collector::initialize(&tempdir.path(), watcher().expect("failed to start watcher"))
-                .expect("unable to initialize collector");
+    fn collect_entries_nonempty_file() -> test::Result {
+        let tempdir = tempfile::tempdir()?;
+        let mut collector = Collector::initialize(tempdir.path(), watcher()?)?;
 
-        let mut file_path = tempdir.path().to_path_buf();
-        file_path.push("test.log");
-        let mut file = File::create(&file_path).expect("failed to create temp file");
+        let (file_path, mut file) = create_log_file(&tempdir)?;
 
-        collector
-            .collect_entries()
-            .expect("failed to collect entries");
+        collector.collect_entries()?;
 
-        writeln!(file, "hello?").expect("failed to write to file");
-        writeln!(file, "world!").expect("failed to write to file");
+        writeln!(file, "hello?")?;
+        writeln!(file, "world!")?;
 
-        let entries = collector
-            .collect_entries()
-            .expect("failed to collect entries");
-        let expected_path = fs::canonicalize(file_path)
-            .unwrap()
-            .to_string_lossy()
-            .into_owned();
-        let expected_entries = vec![
-            LogEntry {
-                line: "hello?".to_string(),
-                metadata: vec![("path".to_string(), expected_path.clone())]
-                    .into_iter()
-                    .collect(),
-            },
-            LogEntry {
-                line: "world!".to_string(),
-                metadata: vec![("path".to_string(), expected_path)]
-                    .into_iter()
-                    .collect(),
-            },
-        ];
-        assert_eq!(entries, expected_entries);
+        let entries = collector.collect_entries()?;
+        assert_eq!(
+            entries,
+            vec![
+                log_entry("hello?", &[("path", file_path.to_str().unwrap())]),
+                log_entry("world!", &[("path", file_path.to_str().unwrap())]),
+            ]
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn iterator_yields_entries() {
-        let tempdir = tempfile::tempdir().expect("unable to create tempdir");
-        let mut collector =
-            Collector::initialize(&tempdir.path(), watcher().expect("failed to start watcher"))
-                .expect("unable to initialize collector");
+    fn iterator_yields_entries() -> test::Result {
+        let tempdir = tempfile::tempdir()?;
+        let mut collector = Collector::initialize(tempdir.path(), watcher()?)?;
 
-        let mut file_path = tempdir.path().to_path_buf();
-        file_path.push("test.log");
-        let mut file = File::create(file_path).expect("failed to create temp file");
+        let (file_path, mut file) = create_log_file(&tempdir)?;
 
-        collector
-            .collect_entries()
-            .expect("failed to collect entries");
+        collector.collect_entries()?;
 
-        writeln!(file, "hello?").expect("failed to write to file");
-        writeln!(file, "world!").expect("failed to write to file");
+        writeln!(file, "hello?")?;
+        writeln!(file, "world!")?;
 
-        let entry = collector
-            .next()
-            .expect("expected at least 1 entry")
-            .expect("failed to collect entries");
-        assert_eq!(entry.line, "hello?".to_string());
+        assert_eq!(
+            collector.next().expect("expected at least 1 entry")?,
+            log_entry("hello?", &[("path", file_path.to_str().unwrap())])
+        );
 
-        let entry = collector
-            .next()
-            .expect("expected at least 2 entries")
-            .expect("failed to collect entries");
-        assert_eq!(entry.line, "world!".to_string());
+        assert_eq!(
+            collector.next().expect("expected at least 2 entries")?,
+            log_entry("world!", &[("path", file_path.to_str().unwrap())])
+        );
+
+        Ok(())
+    }
+
+    fn create_log_file(tempdir: &TempDir) -> io::Result<(PathBuf, File)> {
+        let mut path = fs::canonicalize(tempdir.path())?;
+        path.push("test.log");
+
+        let file = File::create(&path)?;
+
+        Ok((path, file))
     }
 }

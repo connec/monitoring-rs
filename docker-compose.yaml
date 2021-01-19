@@ -17,6 +17,12 @@ services:
       target: builder
     command: [cargo, test, --release]
 
+  lint:
+    build:
+      context: .
+      target: builder
+    command: [cargo, clippy, --tests]
+
   writer:
     image: alpine
     volumes:

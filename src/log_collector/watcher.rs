@@ -2,19 +2,19 @@
 use std::io;
 use std::path::Path;
 
-pub fn watcher() -> io::Result<impl Watcher> {
+pub(crate) fn watcher() -> io::Result<impl Watcher> {
     imp::Watcher::new()
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Descriptor(imp::Descriptor);
+pub(crate) struct Descriptor(imp::Descriptor);
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Event {
-    pub descriptor: Descriptor,
+pub(crate) struct Event {
+    pub(crate) descriptor: Descriptor,
 }
 
-pub trait Watcher {
+pub(crate) trait Watcher {
     fn new() -> io::Result<Self>
     where
         Self: Sized;
@@ -37,9 +37,9 @@ mod imp {
 
     const INOTIFY_BUFFER_SIZE: usize = 1024;
 
-    pub type Descriptor = WatchDescriptor;
+    pub(crate) type Descriptor = WatchDescriptor;
 
-    pub struct Watcher {
+    pub(crate) struct Watcher {
         inner: Inotify,
         buffer: [u8; INOTIFY_BUFFER_SIZE],
     }
@@ -65,7 +65,7 @@ mod imp {
 
         fn read_events_blocking(&mut self) -> io::Result<Vec<Event>> {
             let inotify_events = self.inner.read_events_blocking(&mut self.buffer)?;
-            let events = inotify_events.into_iter().map(|event| Event {
+            let events = inotify_events.map(|event| Event {
                 descriptor: super::Descriptor(event.wd),
             });
 
@@ -85,9 +85,9 @@ mod imp {
 
     use super::Event;
 
-    pub type Descriptor = RawFd;
+    pub(crate) type Descriptor = RawFd;
 
-    pub struct Watcher {
+    pub(crate) struct Watcher {
         inner: kqueue::Watcher,
     }
 

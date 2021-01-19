@@ -12,6 +12,9 @@ monitoring: build-monitoring
 dockertest:
 	@docker-compose up --build --force-recreate test
 
+dockerlint:
+	@docker-compose up --build --force-recreate lint
+
 writer:
 	@docker-compose up -d writer
 

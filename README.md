@@ -90,3 +90,4 @@ I'm taking bets (with myself I guess, since this is a private repo) on which bul
 - [Log collection part 7 (consolidating)](posts/08-log-collection-part-7-consolidating.md)
 - [Log collection part 8 (multi-platform)](posts/09-log-collection-part-8-multi-platform.md)
 - [Log collection part 9 (metadata)](posts/10-log-collection-part-9-metadata.md)
+- [Log collection part 10 (housekeeping)](posts/11-log-collection-part-10-metadata.md)

@@ -1,8 +1,16 @@
 [package]
 name = "monitoring-rs"
+description = "An adventure in building a minimal monitoring pipeline, in Rust."
+
 version = "0.1.0"
 authors = ["Chris Connelly <chris@connec.co.uk>"]
+license = "GPL-3.0-only"
 edition = "2018"
+
+readme = true
+categories = ["command-line-utilities"]
+keywords = ["logging", "metrics", "monitoring"]
+repository = "https://github.com/connec/monitoring-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
