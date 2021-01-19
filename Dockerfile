@@ -4,7 +4,7 @@ FROM rust:1.46.0-alpine as build_base
 WORKDIR /build
 RUN apk add --no-cache musl-dev \
   && rustup component add clippy \
-  && cargo install --git https://github.com/LukeMathWalker/cargo-chef --branch main
+  && cargo install cargo-chef --version ^0.1.12
 
 
 FROM build_base as planner
