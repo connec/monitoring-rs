@@ -8,6 +8,7 @@ services:
     - logs:/var/log/containers
     environment:
     - RUST_LOG=monitoring_rs=debug
+    - ROOT_PATH=/var/log/containers
     ports:
     - 8000:8000
 

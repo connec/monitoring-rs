@@ -36,6 +36,7 @@ kuberun: push
 	@kubectl run monitoring-rs \
 	    --image $(DOCKER_IMAGE) \
 	    --env RUST_LOG=monitoring_rs=info \
+	    --env ROOT_PATH=/var/log/containers \
 	    --restart Never \
 	    --dry-run=client \
 	    --output json \

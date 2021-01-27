@@ -1,37 +1,54 @@
 // main.rs
+#[macro_use]
+extern crate clap;
+
 use std::env;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_std::prelude::FutureExt;
 use async_std::sync::RwLock;
 use async_std::task;
+use structopt::StructOpt;
 
+use monitoring_rs::log_collector::Collector;
 use monitoring_rs::log_database::{self, Database};
 use monitoring_rs::{api, log_collector};
 
-const VAR_CONTAINER_LOG_DIRECTORY: &str = "CONTAINER_LOG_DIRECTORY";
-const DEFAULT_CONTAINER_LOG_DIRECTORY: &str = "/var/log/containers";
+/// Minimal Kubernetes monitoring pipeline.
+#[derive(StructOpt)]
+struct Args {
+    /// The log collector to use.
+    #[structopt(long, env, possible_values = &CollectorArg::variants())]
+    log_collector: CollectorArg,
+
+    /// The root path to watch.
+    #[structopt(long, env, required_if("log-collector", "Directory"))]
+    root_path: Option<PathBuf>,
+}
+
+arg_enum! {
+    enum CollectorArg {
+        Directory,
+    }
+}
 
 #[async_std::main]
 async fn main() -> io::Result<()> {
     env_logger::init();
 
-    let container_log_directory = env::var(VAR_CONTAINER_LOG_DIRECTORY)
-        .or_else(|error| match error {
-            env::VarError::NotPresent => Ok(DEFAULT_CONTAINER_LOG_DIRECTORY.to_string()),
-            error => Err(error),
-        })
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))?;
+    let args = Args::from_args();
+
+    let collector = init_collector(args)?;
 
     let database = init_database()?;
 
     let api_handle = api::server(Arc::clone(&database)).listen("0.0.0.0:8000");
 
     let collector_handle = task::spawn(blocking::unblock(move || {
-        init_collector(container_log_directory.as_ref(), database)
+        run_collector(collector, database)
     }));
 
     api_handle.try_join(collector_handle).await?;
@@ -49,11 +66,19 @@ fn init_database() -> io::Result<Arc<RwLock<Database>>> {
     Ok(Arc::new(RwLock::new(database)))
 }
 
-fn init_collector(
-    container_log_directory: &Path,
-    database: Arc<RwLock<Database>>,
-) -> io::Result<()> {
-    let collector = log_collector::directory::initialize(container_log_directory)?;
+fn init_collector(args: Args) -> io::Result<Box<dyn Collector + Send>> {
+    match args.log_collector {
+        CollectorArg::Directory => {
+            use log_collector::directory::{self, Config};
+            Ok(Box::new(directory::initialize(Config {
+                // We can `unwrap` because we expect presence to be validated by structopt.
+                root_path: args.root_path.unwrap(),
+            })?))
+        }
+    }
+}
+
+fn run_collector(collector: Box<dyn Collector>, database: Arc<RwLock<Database>>) -> io::Result<()> {
     for entry in collector {
         let entry = entry?;
         let mut database = task::block_on(database.write());
