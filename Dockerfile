@@ -1,5 +1,5 @@
 # Dockerfile
-FROM rust:1.46.0-alpine as build_base
+FROM rust:1.49.0-alpine as build_base
 
 WORKDIR /build
 RUN apk add --no-cache musl-dev \

@@ -9,6 +9,8 @@ services:
     environment:
     - RUST_LOG=monitoring_rs=debug
     - ROOT_PATH=/var/log/containers
+    - KUBERNETES_SERVICE_HOST=host.docker.internal
+    - KUBERNETES_SERVICE_PORT=8001
     ports:
     - 8000:8000
 
@@ -31,7 +33,7 @@ services:
     command:
     - sh
     - -c
-    - while true ; do date ; sleep 1 ; done | cat >> /var/log/containers/writer.log
+    - while true ; do date ; sleep 1 ; done | cat >> /var/log/containers/writer_fake_writer_abc123.log
 
   inspect:
     image: alpine

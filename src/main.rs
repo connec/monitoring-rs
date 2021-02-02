@@ -21,7 +21,7 @@ use monitoring_rs::{api, log_collector};
 #[derive(StructOpt)]
 struct Args {
     /// The log collector to use.
-    #[structopt(long, env, possible_values = &CollectorArg::variants())]
+    #[structopt(long, default_value, env, possible_values = &CollectorArg::variants())]
     log_collector: CollectorArg,
 
     /// The root path to watch.
@@ -32,6 +32,13 @@ struct Args {
 arg_enum! {
     enum CollectorArg {
         Directory,
+        Kubernetes,
+    }
+}
+
+impl Default for CollectorArg {
+    fn default() -> Self {
+        Self::Kubernetes
     }
 }
 
@@ -73,6 +80,12 @@ fn init_collector(args: Args) -> io::Result<Box<dyn Collector + Send>> {
             Ok(Box::new(directory::initialize(Config {
                 // We can `unwrap` because we expect presence to be validated by structopt.
                 root_path: args.root_path.unwrap(),
+            })?))
+        }
+        CollectorArg::Kubernetes => {
+            use log_collector::kubernetes::{self, Config};
+            Ok(Box::new(kubernetes::initialize(Config {
+                root_path: args.root_path,
             })?))
         }
     }

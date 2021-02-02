@@ -64,7 +64,7 @@ struct WatchedFile {
     entry_buf: String,
 }
 
-struct Collector<W: Watcher> {
+pub(super) struct Collector<W: Watcher> {
     root_path: PathBuf,
     root_wd: W::Descriptor,
     watched_files: HashMap<W::Descriptor, WatchedFile>,
@@ -93,7 +93,7 @@ pub fn initialize(config: Config) -> io::Result<impl super::Collector> {
 }
 
 impl<W: Watcher> Collector<W> {
-    fn initialize(config: Config, mut watcher: W) -> io::Result<Self> {
+    pub(super) fn initialize(config: Config, mut watcher: W) -> io::Result<Self> {
         let Config { root_path } = config;
 
         debug!("Initialising watch on root path {:?}", root_path);
@@ -300,11 +300,10 @@ mod tests {
     use std::io::{self, Write};
     use std::os::unix;
     use std::path::PathBuf;
-    use std::rc::Rc;
 
     use tempfile::TempDir;
 
-    use crate::log_collector::watcher::watcher;
+    use crate::log_collector::watcher::{mock, watcher};
     use crate::test::{self, log_entry};
 
     use super::{Collector, Config};
@@ -320,24 +319,16 @@ mod tests {
         let config = Config {
             root_path: root_path.clone(),
         };
-        let watcher = mock::MockWatcher::new();
-        let mut collector = Collector::initialize(config, Rc::clone(&watcher))?;
+        let mut watcher = mock::Watcher::new();
+        let mut collector = Collector::initialize(config, watcher.clone())?;
 
-        let (file_path, mut file) = create_log_file(&logs_dir)?;
-        let file_path_canonical = file_path.canonicalize()?;
-        watcher.borrow_mut().add_event(root_path.canonicalize()?);
-
+        let file_path = watcher.simulate_new_file(&logs_dir.path().canonicalize()?)?;
         collector.collect_entries()?; // refresh known files
 
-        writeln!(file, "hello?")?;
-        watcher.borrow_mut().add_event(file_path_canonical.clone());
+        watcher.simulate_write(&file_path, "hello?\n")?;
 
         let entries = collector.collect_entries()?;
         let expected_path = root_path.join(file_path.file_name().unwrap());
-        assert_eq!(
-            watcher.borrow().watched_paths(),
-            &vec![root_path.canonicalize()?, file_path_canonical]
-        );
         assert_eq!(
             entries,
             vec![log_entry(
@@ -354,7 +345,7 @@ mod tests {
         let root_dir = tempfile::tempdir()?;
         let logs_dir = tempfile::tempdir()?;
 
-        let (src_path, mut file) = create_log_file(&logs_dir)?;
+        let (src_path, _) = create_log_file(&logs_dir)?;
         let src_path_canonical = src_path.canonicalize()?;
         let dst_path = root_dir.path().join(src_path.file_name().unwrap());
         unix::fs::symlink(&src_path, &dst_path)?;
@@ -362,17 +353,12 @@ mod tests {
         let config = Config {
             root_path: root_dir.path().to_path_buf(),
         };
-        let watcher = mock::MockWatcher::new();
-        let mut collector = Collector::initialize(config, Rc::clone(&watcher))?;
+        let mut watcher = mock::Watcher::new();
+        let mut collector = Collector::initialize(config, watcher.clone())?;
 
-        writeln!(file, "hello?")?;
-        watcher.borrow_mut().add_event(src_path_canonical.clone());
+        watcher.simulate_write(&src_path_canonical, "hello?\n")?;
 
         let entries = collector.collect_entries()?;
-        assert_eq!(
-            watcher.borrow().watched_paths(),
-            &vec![root_dir.path().canonicalize()?, src_path_canonical]
-        );
         assert_eq!(
             entries,
             vec![log_entry("hello?", &[("path", dst_path.to_str().unwrap())])]
@@ -386,24 +372,18 @@ mod tests {
         let root_dir = tempfile::tempdir()?;
         let root_path = root_dir.path().canonicalize()?;
 
-        let (src_path, mut file) = create_log_file(&root_dir)?;
+        let (src_path, _) = create_log_file(&root_dir)?;
         let src_path_canonical = src_path.canonicalize()?;
         let dst_path = root_path.join("linked.log");
         unix::fs::symlink(&src_path, &dst_path)?;
 
         let config = Config { root_path };
-        let watcher = mock::MockWatcher::new();
-        let mut collector = Collector::initialize(config, Rc::clone(&watcher))?;
+        let mut watcher = mock::Watcher::new();
+        let mut collector = Collector::initialize(config, watcher.clone())?;
 
-        writeln!(file, "hello?")?;
-        watcher.borrow_mut().add_event(src_path_canonical.clone());
+        watcher.simulate_write(&src_path_canonical, "hello?\n")?;
 
         let entries = collector.collect_entries()?;
-        assert_eq!(
-            watcher.borrow().watched_paths(),
-            &vec![root_dir.path().canonicalize()?, src_path_canonical.clone()]
-        );
-
         assert_eq!(entries.len(), 2);
 
         let entry = log_entry("hello?", &[("path", dst_path.to_str().unwrap())]);
@@ -433,7 +413,7 @@ mod tests {
         let root_path = root_dir_parent.path().join("logs");
         unix::fs::symlink(logs_dir.path(), &root_path)?;
 
-        let (src_path, mut file) = create_log_file(&logs_dir)?;
+        let (src_path, _) = create_log_file(&logs_dir)?;
         let src_path_canonical = src_path.canonicalize()?;
         let dst_path = root_path.join("linked.log");
         unix::fs::symlink(&src_path, &dst_path)?;
@@ -441,18 +421,12 @@ mod tests {
         let config = Config {
             root_path: root_path.clone(),
         };
-        let watcher = mock::MockWatcher::new();
-        let mut collector = Collector::initialize(config, Rc::clone(&watcher))?;
+        let mut watcher = mock::Watcher::new();
+        let mut collector = Collector::initialize(config, watcher.clone())?;
 
-        writeln!(file, "hello?")?;
-        watcher.borrow_mut().add_event(src_path_canonical.clone());
+        watcher.simulate_write(&src_path_canonical, "hello?\n")?;
 
         let entries = collector.collect_entries()?;
-        assert_eq!(
-            watcher.borrow().watched_paths(),
-            &vec![logs_dir.path().canonicalize()?, src_path_canonical]
-        );
-
         assert_eq!(entries.len(), 2);
 
         let entry = log_entry("hello?", &[("path", dst_path.to_str().unwrap())]);
@@ -552,140 +526,5 @@ mod tests {
         let file = File::create(&path)?;
 
         Ok((path, file))
-    }
-
-    mod mock {
-        use std::cell::RefCell;
-        use std::io;
-        use std::path::{Path, PathBuf};
-        use std::rc::Rc;
-
-        use crate::log_collector::watcher::{self, Watcher};
-
-        type Descriptor = PathBuf;
-        type Event = PathBuf;
-
-        impl watcher::Descriptor for Descriptor {}
-
-        impl watcher::Event<Descriptor> for Event {
-            fn descriptor(&self) -> &Descriptor {
-                &self
-            }
-        }
-
-        pub(super) struct MockWatcher {
-            watched_paths: Vec<PathBuf>,
-            pending_events: Vec<PathBuf>,
-        }
-
-        impl MockWatcher {
-            pub(super) fn new() -> Rc<RefCell<Self>> {
-                Rc::new(RefCell::new(<Self as Watcher>::new().unwrap()))
-            }
-
-            pub(super) fn watched_paths(&self) -> &Vec<PathBuf> {
-                &self.watched_paths
-            }
-
-            pub(super) fn add_event(&mut self, path: PathBuf) {
-                self.pending_events.push(path);
-            }
-        }
-
-        impl Watcher for MockWatcher {
-            type Descriptor = PathBuf;
-            type Event = PathBuf;
-
-            fn new() -> io::Result<Self> {
-                Ok(Self {
-                    watched_paths: Vec::new(),
-                    pending_events: Vec::new(),
-                })
-            }
-
-            fn watch_directory(&mut self, path: &Path) -> io::Result<Self::Descriptor> {
-                let canonical_path = path.canonicalize()?;
-
-                assert_eq!(
-                    path, canonical_path,
-                    "called watch_directory with link {:?} to {:?}",
-                    path, canonical_path
-                );
-                assert!(
-                    canonical_path.is_dir(),
-                    "called watch_directory with file path {:?}",
-                    path
-                );
-                assert!(
-                    !self.watched_paths.contains(&canonical_path),
-                    "called watch_directory with duplicate path {:?}",
-                    path
-                );
-                self.watched_paths.push(canonical_path.clone());
-                Ok(canonical_path)
-            }
-
-            fn watch_file(&mut self, path: &Path) -> io::Result<Self::Descriptor> {
-                let canonical_path = path.canonicalize()?;
-
-                assert_eq!(
-                    path, canonical_path,
-                    "called watch_file with link {:?} to {:?}",
-                    path, canonical_path
-                );
-                assert!(
-                    canonical_path.is_file(),
-                    "called watch_file with file path {:?}",
-                    path
-                );
-                assert!(
-                    !self.watched_paths.contains(&canonical_path),
-                    "called watch_file with duplicate path {:?}",
-                    path
-                );
-                self.watched_paths.push(canonical_path.clone());
-                Ok(canonical_path)
-            }
-
-            fn read_events(&mut self) -> io::Result<Vec<Self::Event>> {
-                let events = std::mem::replace(&mut self.pending_events, Vec::new());
-                Ok(events)
-            }
-
-            fn read_events_blocking(&mut self) -> io::Result<Vec<Self::Event>> {
-                let events = self.read_events()?;
-                if events.is_empty() {
-                    panic!("called read_events_blocking with no events prepared, this will block forever");
-                }
-                Ok(events)
-            }
-        }
-
-        impl Watcher for Rc<RefCell<MockWatcher>> {
-            type Descriptor = <MockWatcher as Watcher>::Descriptor;
-            type Event = <MockWatcher as Watcher>::Event;
-
-            fn new() -> io::Result<Self> {
-                <MockWatcher as Watcher>::new()
-                    .map(RefCell::new)
-                    .map(Rc::new)
-            }
-
-            fn watch_directory(&mut self, path: &Path) -> io::Result<Self::Descriptor> {
-                self.borrow_mut().watch_directory(path)
-            }
-
-            fn watch_file(&mut self, path: &Path) -> io::Result<Self::Descriptor> {
-                self.borrow_mut().watch_file(path)
-            }
-
-            fn read_events(&mut self) -> io::Result<Vec<Self::Event>> {
-                self.borrow_mut().read_events()
-            }
-
-            fn read_events_blocking(&mut self) -> io::Result<Vec<Self::Event>> {
-                self.borrow_mut().read_events_blocking()
-            }
-        }
     }
 }

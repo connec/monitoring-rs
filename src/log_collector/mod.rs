@@ -3,6 +3,7 @@
 //! The interface for log collection in `monitoring-rs`.
 
 pub mod directory;
+pub mod kubernetes;
 mod watcher;
 
 use std::io;
