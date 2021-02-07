@@ -93,3 +93,4 @@ I'm taking bets (with myself I guess, since this is a private repo) on which bul
 - [Log collection part 10 (housekeeping)](posts/11-log-collection-part-10-metadata.md)
 - [Log collection part 11 (Kubernetes collector)](posts/12-log-collection-part-11-kubernetes-collector.md)
 - [Log collection part 12 (Kubernetes collector – again)](13-log-collection-part-12-kubernetes-collector-again.md)
+- [Log collection part 13 (waxing philosophical)](14-log-collection-part-13-waxing-philosophical.md)

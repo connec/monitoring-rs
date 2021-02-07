@@ -1,7 +1,7 @@
 // src/log_collector/kubernetes.rs
 //! A log collector that collects logs from containers on a Kubernetes node.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -57,6 +57,7 @@ pub fn initialize(config: Config) -> io::Result<impl super::Collector> {
             },
             watcher,
         )?,
+        metadata_cache: HashMap::new(),
     })
 }
 
@@ -69,6 +70,7 @@ struct Collector<W: Watcher> {
     kube_client: kube::Client,
     kube_resource: kube::Resource,
     directory: directory::Collector<W>,
+    metadata_cache: HashMap<String, HashMap<String, String>>,
 }
 
 impl<W: Watcher> Collector<W> {
@@ -81,8 +83,18 @@ impl<W: Watcher> Collector<W> {
         // `unwrap` is OK since we converted from `str` above.
         let stem = stem.to_str().unwrap();
 
-        // TODO: `unwrap` is not ideal, since log file names may not have exactly 3 underscores.
-        stem.split('_').collect::<Vec<_>>().try_into().unwrap()
+        // TODO: `unwrap` is not ideal, since log file names may not have exactly 2 underscores.
+        let [pod_name, namespace, container]: [&str; 3] =
+            stem.split('_').collect::<Vec<_>>().try_into().unwrap();
+
+        // TODO: `unwrap` is not ideal, since the `container` component might not include `-`.
+        let [container_id, container_name]: [&str; 2] = container
+            .rsplitn(2, '-')
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        [pod_name, namespace, container_name, container_id]
     }
 
     fn query_pod_metadata(&mut self, namespace: &str, pod_name: &str) -> BTreeMap<String, String> {
@@ -120,24 +132,25 @@ impl<W: Watcher> Iterator for Collector<W> {
         Some(entry.map(|mut entry| {
             // `unwrap` is OK since we know `directory` always sets `path`.
             let path = entry.metadata.remove("path").unwrap();
-            let [pod_name, namespace, container_name, container_id] = Self::parse_path(&path);
-            entry
-                .metadata
-                .insert("pod_name".to_string(), pod_name.to_string());
-            entry
-                .metadata
-                .insert("namespace".to_string(), namespace.to_string());
-            entry
-                .metadata
-                .insert("container_name".to_string(), container_name.to_string());
-            entry
-                .metadata
-                .insert("container_id".to_string(), container_id.to_string());
+            let metadata = if let Some(metadata) = self.metadata_cache.get(&path) {
+                metadata
+            } else {
+                let mut metadata = HashMap::new();
 
-            for (key, value) in self.query_pod_metadata(namespace, pod_name) {
-                entry.metadata.insert(key, value);
-            }
+                let [pod_name, namespace, container_name, container_id] = Self::parse_path(&path);
+                metadata.insert("pod_name".to_string(), pod_name.to_string());
+                metadata.insert("namespace".to_string(), namespace.to_string());
+                metadata.insert("container_name".to_string(), container_name.to_string());
+                metadata.insert("container_id".to_string(), container_id.to_string());
 
+                for (key, value) in self.query_pod_metadata(namespace, pod_name) {
+                    metadata.insert(key, value);
+                }
+
+                self.metadata_cache.entry(path).or_insert(metadata)
+            };
+
+            entry.metadata = metadata.clone();
             entry
         }))
     }

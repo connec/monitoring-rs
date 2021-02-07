@@ -1,8 +1,9 @@
 # Dockerfile
-FROM rust:1.49.0-alpine as build_base
+FROM rust:1.49.0-alpine3.12 as build_base
 
 WORKDIR /build
-RUN apk add --no-cache musl-dev \
+ENV RUSTFLAGS='-C target-feature=-crt-static'
+RUN apk add --no-cache musl-dev openssl-dev \
   && rustup component add clippy \
   && cargo install cargo-chef --version ^0.1.12
 
@@ -22,9 +23,9 @@ COPY . .
 RUN cargo build --release
 
 
-FROM alpine as runtime
+FROM alpine:3.12 as runtime
 
-RUN apk add --no-cache tini
+RUN apk add --no-cache libgcc tini
 
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["monitoring-rs"]

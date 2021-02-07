@@ -51,3 +51,6 @@ kuberun: push
 
 kubecleanup:
 	@kubectl delete pods monitoring-rs --ignore-not-found
+
+deploy: push
+	@kubectl apply --namespace monitoring-rs -f deployment/kubernetes.yaml

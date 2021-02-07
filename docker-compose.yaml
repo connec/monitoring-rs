@@ -8,9 +8,8 @@ services:
     - logs:/var/log/containers
     environment:
     - RUST_LOG=monitoring_rs=debug
+    - LOG_COLLECTOR=Directory
     - ROOT_PATH=/var/log/containers
-    - KUBERNETES_SERVICE_HOST=host.docker.internal
-    - KUBERNETES_SERVICE_PORT=8001
     ports:
     - 8000:8000
 

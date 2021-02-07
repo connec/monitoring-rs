@@ -19,8 +19,27 @@ pub type Server = tide::Server<State>;
 /// Initialise an instance of the `monitoring-rs` HTTP API.
 pub fn server(database: State) -> Server {
     let mut app = tide::Server::with_state(database);
+    app.at("/status").get(get_status);
     app.at("/logs/:key/*value").get(read_logs);
     app
+}
+
+async fn get_status(req: tide::Request<State>) -> tide::Result {
+    let database = req.state().read().await;
+    let files_len = database.files_len();
+    let index_keys = database
+        .index_keys()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>();
+
+    let status = serde_json::json!({
+        "files_len": files_len,
+        "index_keys": index_keys
+    });
+
+    Ok(tide::Response::builder(tide::StatusCode::Ok)
+        .body(tide::Body::from_json(&status)?)
+        .build())
 }
 
 async fn read_logs(req: tide::Request<State>) -> tide::Result {

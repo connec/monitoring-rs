@@ -2,7 +2,7 @@
 
 //! The interface for log storage in `monitoring-rs`.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{hash_map, HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Seek, SeekFrom, Write};
@@ -122,6 +122,18 @@ impl Database {
             files,
             index,
         })
+    }
+
+    /// The number of log files currently being persisted.
+    #[must_use]
+    pub fn files_len(&self) -> usize {
+        self.files.len()
+    }
+
+    /// An iterator of the keys currently in the index.
+    #[must_use]
+    pub fn index_keys(&self) -> hash_map::Keys<'_, (String, String), HashSet<String>> {
+        self.index.keys()
     }
 
     /// # Errors
