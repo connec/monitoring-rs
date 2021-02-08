@@ -1,9 +1,9 @@
 # Makefile
-.PHONY: build-monitoring monitoring writer inspect rotate down reset push
+.PHONY: build-monitoring monitoring writer inspect rotate down reset push frontend frontendwatch
 
-DOCKER_IMAGE := registry.digitalocean.com/connec-co-uk/monitoring-rs:latest
+export DOCKER_IMAGE := registry.digitalocean.com/connec-co-uk/monitoring-rs:latest
 
-build-monitoring:
+build-monitoring: frontend
 	@docker-compose build monitoring
 
 monitoring: build-monitoring
@@ -53,4 +53,11 @@ kubecleanup:
 	@kubectl delete pods monitoring-rs --ignore-not-found
 
 deploy: push
-	@kubectl apply --namespace monitoring-rs -f deployment/kubernetes.yaml
+	$(eval export DOCKER_DIGEST := $(shell docker inspect $(DOCKER_IMAGE) --format '{{ index .RepoDigests 0 }}'))
+	@cat deployment/kubernetes.yaml | envsubst | kubectl apply --namespace monitoring-rs -f -
+
+frontend:
+	@cd frontend && elm make src/Main.elm
+
+frontendwatch:
+	@watchexec --no-shell --exts elm --watch frontend/src make frontend

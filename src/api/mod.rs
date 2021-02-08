@@ -2,6 +2,7 @@
 
 //! Types and functions for initialising the `monitoring-rs` HTTP API.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use async_std::sync::RwLock;
@@ -19,6 +20,9 @@ pub type Server = tide::Server<State>;
 /// Initialise an instance of the `monitoring-rs` HTTP API.
 pub fn server(database: State) -> Server {
     let mut app = tide::Server::with_state(database);
+    app.at("/")
+        .serve_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("frontend/index.html"))
+        .unwrap();
     app.at("/status").get(get_status);
     app.at("/logs/:key/*value").get(read_logs);
     app

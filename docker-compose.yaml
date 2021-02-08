@@ -3,7 +3,7 @@ version: '3.8'
 services:
   monitoring:
     build: .
-    image: registry.digitalocean.com/connec-co-uk/monitoring-rs:latest
+    image: $DOCKER_IMAGE
     volumes:
     - logs:/var/log/containers
     environment:

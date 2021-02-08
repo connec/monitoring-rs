@@ -48,7 +48,7 @@ spec:
       serviceAccountName: monitoring-rs
       containers:
       - name: monitoring-rs
-        image: registry.digitalocean.com/connec-co-uk/monitoring-rs:latest
+        image: $DOCKER_DIGEST
         volumeMounts:
         - name: varlog
           mountPath: /var/log

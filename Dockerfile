@@ -30,4 +30,5 @@ RUN apk add --no-cache libgcc tini
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["monitoring-rs"]
 
+COPY frontend/index.html /build/frontend/index.html
 COPY --from=builder /build/target/release/monitoring-rs /usr/local/bin
