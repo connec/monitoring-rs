@@ -28,6 +28,7 @@ kube = "0.48.0"
 kube-runtime = "0.48.0"
 k8s-openapi = { version = "0.11.0", default-features = false, features = ["v1_20"] }
 tokio = { version = "1.1.1", features = ["rt"] }
+serde = "1.0.123"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 inotify = { version = "0.8.3", default-features = false }

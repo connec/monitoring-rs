@@ -21,6 +21,7 @@
 )]
 
 pub mod api;
+pub mod database;
 pub mod log_collector;
 pub mod log_database;
 

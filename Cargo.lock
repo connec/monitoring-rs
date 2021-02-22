@@ -1481,6 +1481,7 @@ dependencies = [
  "kube-runtime",
  "log",
  "md5",
+ "serde",
  "serde_json",
  "structopt",
  "tempfile",

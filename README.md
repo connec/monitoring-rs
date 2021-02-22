@@ -96,3 +96,4 @@ I'm taking bets (with myself I guess, since this is a private repo) on which bul
 - [Log collection part 13 (waxing philosophical)](posts/14-log-collection-part-13-waxing-philosophical.md)
 - [Log collection part 14 (UI)](posts/15-log-collection-part-14-ui.md)
 - [Log collection part 15 (next steps)](posts/16-log-collection-part-15-next-steps.md)
+- [Metric collection part 1 – design](posts/17-metric-collection-part-1-database-design.md)
