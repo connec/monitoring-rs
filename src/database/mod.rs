@@ -45,6 +45,14 @@ pub struct Event {
     data: Vec<u8>,
 }
 
+impl Event {
+    /// Construct a new [`Event`] with a `timestamp` and some `data`.
+    #[must_use]
+    pub fn new(timestamp: Timestamp, data: Vec<u8>) -> Self {
+        Event { timestamp, data }
+    }
+}
+
 /// Possible error situations when opening a database.
 #[derive(Debug)]
 pub enum OpenError {
